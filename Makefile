@@ -2,14 +2,13 @@ IMAGE=azar-run-flow
 ENV_NAME=azar-run-flow
 PYTHON_VERSION=3.11
 
-.PHONY: build shell test mlflow clean env-yml conda-env
+.PHONY: build shell test mlflow env-yml conda-env clean
 
 build:
 	docker build -t $(IMAGE) .
 
 shell:
 	docker run --rm -it \
-		-p 5000:5000 \
 		-v "$(PWD)":/app \
 		$(IMAGE)
 
@@ -21,10 +20,13 @@ test:
 
 mlflow:
 	docker run --rm -it \
-		-p 5000:5000 \
+		-p 5001:5000 \
 		-v "$(PWD)":/app \
 		$(IMAGE) \
-		mlflow ui --host 0.0.0.0 --port 5000
+		mlflow ui \
+			--host 0.0.0.0 \
+			--port 5000 \
+			--backend-store-uri sqlite:///mlflow.db
 
 env-yml:
 	printf '%s\n' \
@@ -44,4 +46,6 @@ conda-env: env-yml
 	conda env create -f environment.yml
 
 clean:
-	docker image rm $(IMAGE)
+	-docker image rm $(IMAGE)
+	rm -f mlflow.db
+	rm -rf mlartifacts mlruns

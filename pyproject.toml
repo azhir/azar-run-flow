@@ -12,6 +12,7 @@ dependencies = [
     "mlflow>=3,<4",
     "numpy>=1.23",
     "matplotlib>=3.6",
+    "psutil>=5.9",
 ]
 
 [tool.setuptools.packages.find]

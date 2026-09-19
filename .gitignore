@@ -1,11 +1,13 @@
+.venv/
 __pycache__/
 *.pyc
 .DS_Store
+*.egg-info/
+build/
+dist/
 
 mlruns/
 mlflow.db
+mlartifacts/
 
-.venv/
 .env/
-
-src/*.egg-info/

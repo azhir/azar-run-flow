@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -12,10 +13,6 @@ from .provenance import collect_provenance
 
 
 class Run:
-    """
-    Thin experiment logger backed by MLflow.
-    """
-
     def metric(
         self,
         name: str,
@@ -23,17 +20,7 @@ class Run:
         *,
         step: int | None = None,
     ) -> None:
-        """
-        Log a scalar metric.
-
-        Repeated calls with different steps appear as a live curve
-        in the MLflow UI.
-        """
-        mlflow.log_metric(
-            name,
-            float(value),
-            step=step,
-        )
+        mlflow.log_metric(name, float(value), step=step)
 
     def metrics(
         self,
@@ -46,27 +33,13 @@ class Run:
             step=step,
         )
 
-    def figure(
-        self,
-        name: str,
-        figure: Any,
-    ) -> None:
-        """
-        Log a matplotlib or Plotly figure.
-        """
+    def figure(self, name: str, figure: Any) -> None:
         mlflow.log_figure(
             figure,
             f"figures/{name}",
         )
 
-    def array(
-        self,
-        name: str,
-        array: np.ndarray,
-    ) -> None:
-        """
-        Store a NumPy array as an artifact.
-        """
+    def array(self, name: str, array: np.ndarray) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / name
 
@@ -91,11 +64,7 @@ class Run:
             artifact_path=folder,
         )
 
-    def text(
-        self,
-        name: str,
-        text: str,
-    ) -> None:
+    def text(self, name: str, text: str) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / name
             path.write_text(text)
@@ -115,11 +84,16 @@ def run_experiment(
     seed: int | None = None,
     dataset: dict | None = None,
 ) -> Any:
+    mlflow.set_tracking_uri(
+        os.getenv(
+            "MLFLOW_TRACKING_URI",
+            "sqlite:///mlflow.db",
+        )
+    )
 
     mlflow.set_experiment(experiment_name)
 
     provenance = collect_provenance()
-
     provenance.update(
         {
             "seed": seed,
@@ -131,10 +105,8 @@ def run_experiment(
         run_name=run_name,
         log_system_metrics=True,
     ) as active_run:
-
         run = Run()
 
-        # Full reproducibility information
         mlflow.log_dict(
             config,
             "config.json",
@@ -145,7 +117,6 @@ def run_experiment(
             "provenance.json",
         )
 
-        # Useful searchable tags
         if provenance["git_commit"]:
             mlflow.set_tag(
                 "git_commit",
@@ -158,7 +129,10 @@ def run_experiment(
         )
 
         if seed is not None:
-            mlflow.log_param("seed", seed)
+            mlflow.log_param(
+                "seed",
+                seed,
+            )
 
         start = time.perf_counter()
 
