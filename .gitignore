@@ -7,3 +7,5 @@ mlflow.db
 
 .venv/
 .env/
+
+src/*.egg-info/
