@@ -1,6 +1,8 @@
 IMAGE=azar-run-flow
+ENV_NAME=azar-run-flow
+PYTHON_VERSION=3.11
 
-.PHONY: build shell test mlflow clean
+.PHONY: build shell test mlflow clean env-yml conda-env
 
 build:
 	docker build -t $(IMAGE) .
@@ -23,6 +25,23 @@ mlflow:
 		-v "$(PWD)":/app \
 		$(IMAGE) \
 		mlflow ui --host 0.0.0.0 --port 5000
+
+env-yml:
+	printf '%s\n' \
+		'name: $(ENV_NAME)' \
+		'' \
+		'channels:' \
+		'  - conda-forge' \
+		'' \
+		'dependencies:' \
+		'  - python=$(PYTHON_VERSION)' \
+		'  - pip' \
+		'  - pip:' \
+		'      - -e .' \
+		> environment.yml
+
+conda-env: env-yml
+	conda env create -f environment.yml
 
 clean:
 	docker image rm $(IMAGE)
