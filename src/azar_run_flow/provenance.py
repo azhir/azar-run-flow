@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import platform
+import socket
 import subprocess
 import sys
 
@@ -17,13 +18,31 @@ def _command(*args: str) -> str | None:
 
 
 def collect_provenance() -> dict:
-    git_commit = _command("git", "rev-parse", "HEAD")
-    git_status = _command("git", "status", "--porcelain")
+    git_commit = _command(
+        "git",
+        "rev-parse",
+        "HEAD",
+    )
+
+    git_branch = _command(
+        "git",
+        "rev-parse",
+        "--abbrev-ref",
+        "HEAD",
+    )
+
+    git_status = _command(
+        "git",
+        "status",
+        "--porcelain",
+    )
 
     return {
         "git_commit": git_commit,
+        "git_branch": git_branch,
         "git_dirty": bool(git_status),
         "python": sys.version,
         "platform": platform.platform(),
+        "hostname": socket.gethostname(),
         "command": sys.argv,
     }

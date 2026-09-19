@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 import time
+import traceback
 from pathlib import Path
 from typing import Any, Callable
 
@@ -20,7 +21,11 @@ class Run:
         *,
         step: int | None = None,
     ) -> None:
-        mlflow.log_metric(name, float(value), step=step)
+        mlflow.log_metric(
+            name,
+            float(value),
+            step=step,
+        )
 
     def metrics(
         self,
@@ -29,24 +34,38 @@ class Run:
         step: int | None = None,
     ) -> None:
         mlflow.log_metrics(
-            {k: float(v) for k, v in values.items()},
+            {
+                key: float(value)
+                for key, value in values.items()
+            },
             step=step,
         )
 
-    def figure(self, name: str, figure: Any) -> None:
+    def figure(
+        self,
+        name: str,
+        figure: Any,
+    ) -> None:
         mlflow.log_figure(
             figure,
             f"figures/{name}",
         )
 
-    def array(self, name: str, array: np.ndarray) -> None:
+    def array(
+        self,
+        name: str,
+        array: np.ndarray,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / name
 
             if path.suffix != ".npy":
                 path = path.with_suffix(".npy")
 
-            np.save(path, array)
+            np.save(
+                path,
+                array,
+            )
 
             mlflow.log_artifact(
                 str(path),
@@ -64,15 +83,42 @@ class Run:
             artifact_path=folder,
         )
 
-    def text(self, name: str, text: str) -> None:
+    def text(
+        self,
+        name: str,
+        text: str,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / name
-            path.write_text(text)
+
+            path.write_text(
+                text,
+                encoding="utf-8",
+            )
 
             mlflow.log_artifact(
                 str(path),
                 artifact_path="text",
             )
+
+    def json(
+        self,
+        name: str,
+        value: dict,
+    ) -> None:
+        mlflow.log_dict(
+            value,
+            f"json/{name}",
+        )
+
+    def checkpoint(
+        self,
+        path: str | Path,
+    ) -> None:
+        mlflow.log_artifact(
+            str(path),
+            artifact_path="checkpoints",
+        )
 
 
 def run_experiment(
@@ -91,9 +137,12 @@ def run_experiment(
         )
     )
 
-    mlflow.set_experiment(experiment_name)
+    mlflow.set_experiment(
+        experiment_name,
+    )
 
     provenance = collect_provenance()
+
     provenance.update(
         {
             "seed": seed,
@@ -123,6 +172,12 @@ def run_experiment(
                 provenance["git_commit"],
             )
 
+        if provenance["git_branch"]:
+            mlflow.set_tag(
+                "git_branch",
+                provenance["git_branch"],
+            )
+
         mlflow.set_tag(
             "git_dirty",
             provenance["git_dirty"],
@@ -136,20 +191,54 @@ def run_experiment(
 
         start = time.perf_counter()
 
-        result = experiment(
-            run,
-            config,
-        )
+        try:
+            result = experiment(
+                run,
+                config,
+            )
 
-        runtime = time.perf_counter() - start
+        except Exception:
+            runtime = (
+                time.perf_counter()
+                - start
+            )
 
-        run.metric(
-            "runtime_seconds",
-            runtime,
-        )
+            run.metric(
+                "runtime_seconds",
+                runtime,
+            )
 
-        print(
-            f"MLflow run: {active_run.info.run_id}"
-        )
+            run.text(
+                "traceback.txt",
+                traceback.format_exc(),
+            )
 
-        return result
+            mlflow.set_tag(
+                "azar.status",
+                "failed",
+            )
+
+            raise
+
+        else:
+            runtime = (
+                time.perf_counter()
+                - start
+            )
+
+            run.metric(
+                "runtime_seconds",
+                runtime,
+            )
+
+            mlflow.set_tag(
+                "azar.status",
+                "completed",
+            )
+
+            print(
+                f"MLflow run: "
+                f"{active_run.info.run_id}"
+            )
+
+            return result

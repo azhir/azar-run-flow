@@ -15,7 +15,9 @@ def experiment(run, config):
 
         time.sleep(0.1)
 
-    return {"final_loss": loss}
+    return {
+        "final_loss": loss,
+    }
 
 
 config = {
@@ -24,10 +26,11 @@ config = {
 }
 
 
-run_experiment(
-    experiment,
-    config=config,
-    experiment_name="azar-test",
-    run_name="basic-run",
-    seed=42,
-)
+if __name__ == "__main__":
+    run_experiment(
+        experiment,
+        config=config,
+        experiment_name="azar-test",
+        run_name="basic-run",
+        seed=42,
+    )
