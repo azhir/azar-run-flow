@@ -1,5 +1,3 @@
-import time
-
 from azar_run_flow import run_experiment
 
 
@@ -13,24 +11,19 @@ def experiment(run, config):
             step=step,
         )
 
-        time.sleep(0.1)
-
     return {
         "final_loss": loss,
     }
 
 
-config = {
-    "steps": 20,
-    "method": "dummy",
-}
-
-
 if __name__ == "__main__":
     run_experiment(
         experiment,
-        config=config,
+        config={
+            "steps": 20,
+            "method": "dummy",
+            "seed": 42,
+        },
         experiment_name="azar-test",
         run_name="basic-run",
-        seed=42,
     )

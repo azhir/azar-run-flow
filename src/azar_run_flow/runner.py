@@ -4,16 +4,33 @@ import os
 import tempfile
 import time
 import traceback
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 import mlflow
 import numpy as np
 
-from .provenance import collect_provenance
+from .config import (
+    Config,
+    config_yaml,
+    flatten_config,
+    hydra_overrides,
+    resolve_config,
+)
+from .provenance import (
+    collect_git_diff,
+    collect_git_status,
+    collect_packages,
+    collect_provenance,
+)
+from .seed import set_seed
 
 
 class Run:
+    def __init__(self, run_id: str) -> None:
+        self.id = run_id
+
     def metric(
         self,
         name: str,
@@ -41,6 +58,13 @@ class Run:
             step=step,
         )
 
+    def tag(
+        self,
+        name: str,
+        value: Any,
+    ) -> None:
+        mlflow.set_tag(name, value)
+
     def figure(
         self,
         name: str,
@@ -62,10 +86,7 @@ class Run:
             if path.suffix != ".npy":
                 path = path.with_suffix(".npy")
 
-            np.save(
-                path,
-                array,
-            )
+            np.save(path, array)
 
             mlflow.log_artifact(
                 str(path),
@@ -87,6 +108,8 @@ class Run:
         self,
         name: str,
         text: str,
+        *,
+        folder: str = "text",
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / name
@@ -98,7 +121,7 @@ class Run:
 
             mlflow.log_artifact(
                 str(path),
-                artifact_path="text",
+                artifact_path=folder,
             )
 
     def json(
@@ -121,21 +144,97 @@ class Run:
         )
 
 
-def run_experiment(
-    experiment: Callable[[Run, dict], Any],
+def _log_config(
+    config: Config,
+) -> dict[str, Any]:
+    resolved = resolve_config(config)
+
+    # Complete authoritative config.
+    mlflow.log_text(
+        config_yaml(config),
+        "config/resolved.yaml",
+    )
+
+    mlflow.log_dict(
+        resolved,
+        "config/resolved.json",
+    )
+
+    # Exact CLI deltas applied by Hydra.
+    overrides = hydra_overrides()
+
+    if overrides:
+        mlflow.log_text(
+            "\n".join(overrides),
+            "config/overrides.txt",
+        )
+
+    # Searchable fields in MLflow.
+    params = flatten_config(resolved)
+
+    if params:
+        mlflow.log_params(params)
+
+    return resolved
+
+
+def _log_provenance(
+    provenance: dict[str, Any],
+) -> None:
+    mlflow.log_dict(
+        provenance,
+        "provenance/provenance.json",
+    )
+
+    mlflow.log_text(
+        collect_packages(),
+        "provenance/packages.txt",
+    )
+
+    git_status = collect_git_status()
+
+    if git_status:
+        mlflow.log_text(
+            git_status,
+            "provenance/git_status.txt",
+        )
+
+    if provenance.get("git_dirty"):
+        git_diff = collect_git_diff()
+
+        if git_diff:
+            mlflow.log_text(
+                git_diff,
+                "provenance/git_diff.patch",
+            )
+
+
+@contextmanager
+def azar_run(
     *,
-    config: dict,
+    config: Config,
     experiment_name: str = "default",
     run_name: str | None = None,
     seed: int | None = None,
     dataset: dict | None = None,
-) -> Any:
+    log_system_metrics: bool = True,
+) -> Iterator[Run]:
     mlflow.set_tracking_uri(
         os.getenv(
             "MLFLOW_TRACKING_URI",
             "sqlite:///mlflow.db",
         )
     )
+
+    resolved = resolve_config(config)
+
+    if seed is None:
+        config_seed = resolved.get("seed")
+
+        if isinstance(config_seed, int):
+            seed = config_seed
+
+    set_seed(seed)
 
     mlflow.set_experiment(
         experiment_name,
@@ -152,50 +251,36 @@ def run_experiment(
 
     with mlflow.start_run(
         run_name=run_name,
-        log_system_metrics=True,
+        log_system_metrics=log_system_metrics,
     ) as active_run:
-        run = Run()
-
-        mlflow.log_dict(
-            config,
-            "config.json",
+        run = Run(
+            active_run.info.run_id,
         )
 
-        mlflow.log_dict(
-            provenance,
-            "provenance.json",
-        )
+        _log_config(config)
+        _log_provenance(provenance)
 
         if provenance["git_commit"]:
-            mlflow.set_tag(
+            run.tag(
                 "git_commit",
                 provenance["git_commit"],
             )
 
         if provenance["git_branch"]:
-            mlflow.set_tag(
+            run.tag(
                 "git_branch",
                 provenance["git_branch"],
             )
 
-        mlflow.set_tag(
+        run.tag(
             "git_dirty",
             provenance["git_dirty"],
         )
 
-        if seed is not None:
-            mlflow.log_param(
-                "seed",
-                seed,
-            )
-
         start = time.perf_counter()
 
         try:
-            result = experiment(
-                run,
-                config,
-            )
+            yield run
 
         except Exception:
             runtime = (
@@ -208,12 +293,12 @@ def run_experiment(
                 runtime,
             )
 
-            run.text(
-                "traceback.txt",
+            mlflow.log_text(
                 traceback.format_exc(),
+                "failure/traceback.txt",
             )
 
-            mlflow.set_tag(
+            run.tag(
                 "azar.status",
                 "failed",
             )
@@ -231,14 +316,40 @@ def run_experiment(
                 runtime,
             )
 
-            mlflow.set_tag(
+            run.tag(
                 "azar.status",
                 "completed",
             )
 
             print(
-                f"MLflow run: "
-                f"{active_run.info.run_id}"
+                f"MLflow run: {run.id}"
             )
 
-            return result
+
+def run_experiment(
+    experiment: Callable[
+        [Run, dict[str, Any]],
+        Any,
+    ],
+    *,
+    config: Config,
+    experiment_name: str = "default",
+    run_name: str | None = None,
+    seed: int | None = None,
+    dataset: dict | None = None,
+    log_system_metrics: bool = True,
+) -> Any:
+    resolved = resolve_config(config)
+
+    with azar_run(
+        config=config,
+        experiment_name=experiment_name,
+        run_name=run_name,
+        seed=seed,
+        dataset=dataset,
+        log_system_metrics=log_system_metrics,
+    ) as run:
+        return experiment(
+            run,
+            resolved,
+        )

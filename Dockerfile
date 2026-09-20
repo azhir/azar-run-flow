@@ -10,6 +10,6 @@ COPY pyproject.toml .
 COPY src ./src
 
 RUN python -m pip install --upgrade pip \
-    && pip install .
+    && pip install ".[dev]"
 
 CMD ["bash"]

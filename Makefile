@@ -1,6 +1,6 @@
 IMAGE=azar-run-flow
 
-.PHONY: build shell run test mlflow conda-env clean
+.PHONY: build shell test smoke mlflow conda-env clean
 
 build:
 	docker build -t $(IMAGE) .
@@ -10,14 +10,13 @@ shell:
 		-v "$(PWD)":/app \
 		$(IMAGE)
 
-run:
-	@test -n "$(EXP)" || (echo "Usage: make run EXP=experiments/my_experiment.py" && exit 1)
+test:
 	docker run --rm \
 		-v "$(PWD)":/app \
 		$(IMAGE) \
-		python $(EXP)
+		pytest -q
 
-test:
+smoke:
 	docker run --rm \
 		-v "$(PWD)":/app \
 		$(IMAGE) \
@@ -39,4 +38,4 @@ conda-env:
 clean:
 	-docker image rm $(IMAGE)
 	rm -f mlflow.db
-	rm -rf mlartifacts mlruns
+	rm -rf mlartifacts mlruns outputs multirun

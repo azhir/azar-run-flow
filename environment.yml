@@ -7,11 +7,7 @@ dependencies:
   - python=3.11
   - pip
 
-  # Add Conda-specific dependencies here when needed.
-  # Examples:
-  # - fenics
-  # - petsc
-  # - hdf5
+  # Conda-only dependencies can go here.
 
   - pip:
-      - -e .
+      - -e ".[dev]"

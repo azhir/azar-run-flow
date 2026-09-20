@@ -4,6 +4,7 @@ import platform
 import socket
 import subprocess
 import sys
+from importlib.metadata import distributions
 
 
 def _command(*args: str) -> str | None:
@@ -15,6 +16,39 @@ def _command(*args: str) -> str | None:
         ).strip()
     except Exception:
         return None
+
+
+def collect_packages() -> str:
+    packages: list[str] = []
+
+    for dist in distributions():
+        name = dist.metadata.get("Name")
+
+        if name:
+            packages.append(
+                f"{name}=={dist.version}"
+            )
+
+    packages.sort(key=str.lower)
+
+    return "\n".join(packages)
+
+
+def collect_git_status() -> str | None:
+    return _command(
+        "git",
+        "status",
+        "--porcelain",
+    )
+
+
+def collect_git_diff() -> str | None:
+    return _command(
+        "git",
+        "diff",
+        "HEAD",
+        "--binary",
+    )
 
 
 def collect_provenance() -> dict:
@@ -31,11 +65,7 @@ def collect_provenance() -> dict:
         "HEAD",
     )
 
-    git_status = _command(
-        "git",
-        "status",
-        "--porcelain",
-    )
+    git_status = collect_git_status()
 
     return {
         "git_commit": git_commit,
