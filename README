@@ -14,7 +14,7 @@ MLflow
 
 ## Key commands
 
-Build the Docker image:
+Build:
 
 ```bash
 make build
@@ -26,7 +26,7 @@ Run tests:
 make test
 ```
 
-Run the end-to-end smoke test:
+Run the smoke test:
 
 ```bash
 make smoke
@@ -46,9 +46,7 @@ make mlflow
 
 Then open:
 
-```text
 http://localhost:5001
-```
 
 Clean local Docker/MLflow state:
 
@@ -56,11 +54,11 @@ Clean local Docker/MLflow state:
 make clean
 ```
 
-> `make clean` deletes local MLflow runs/artifacts, so do not use it if you want to keep them.
+> `make clean` deletes local MLflow runs and artifacts.
 
 ## Experiment workflow
 
-Experiment YAMLs live in the research project, e.g.
+Experiment YAMLs live in the research project:
 
 ```text
 eigenfun/
@@ -100,17 +98,15 @@ python experiments/run.py -m \
 
 AzarRunFlow records:
 
-```text
-resolved config
-Git commit / branch / dirty state
-Git diff when dirty
-package/environment snapshot
-seed
-runtime
-metrics
-figures / arrays / checkpoints
-failure tracebacks
-```
+- resolved configuration
+- Git commit, branch, and dirty state
+- Git diff when dirty
+- package/environment snapshot
+- seed
+- runtime
+- metrics
+- figures, arrays, checkpoints, and other artifacts
+- failure tracebacks
 
 For important runs, preferably commit first:
 
@@ -120,16 +116,14 @@ git add .
 git commit -m "Prepare experiment"
 ```
 
-Then use MLflow to inspect the run:
+Inspect runs in MLflow:
 
-```text
 http://localhost:5001
-```
 
-The most important artifact for reproduction is:
+The main reproducibility artifact is:
 
 ```text
 config/resolved.yaml
 ```
 
-Together with the logged Git commit and environment information, this describes what actually ran.
+Together with the logged Git commit and environment information, this records what actually ran.
