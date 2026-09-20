@@ -125,5 +125,3 @@ The main reproducibility artifact is:
 ```text
 config/resolved.yaml
 ```
-
-Together with the logged Git commit and environment information, this records what actually ran.
